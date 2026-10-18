@@ -15,7 +15,7 @@ import time
 import numpy as np
 
 from r1.interface.joints import NUM_SIM_MOTORS, WAIST
-from r1.interface.robot import R1LowLevel, wait
+from r1.interface.robot import R1LowLevel, finish, wait
 from r1.kinematics.arm_ik import ArmIK
 
 START = np.array([0.30, 0.30, 0.05])
@@ -26,6 +26,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--domain", type=int, default=1)
     p.add_argument("--iface", default="lo")
+    p.add_argument("--damp-on-exit", action="store_true", help="정상 종료 때도 damp (실기 권장). 기본: 마지막 자세 유지")
     p.add_argument("--cycles", type=int, default=2)
     p.add_argument("--period", type=float, default=4.0, help="왕복 1회 시간 [s]")
     args = p.parse_args()
@@ -65,11 +66,15 @@ def main():
         robot.set_target(np.zeros(NUM_SIM_MOTORS), tau_ff=np.zeros(NUM_SIM_MOTORS))
         wait(3.0, robot)
     except KeyboardInterrupt:
-        print("\nCtrl+C")
-    finally:
         robot.damp()
         time.sleep(0.5)
-        print("damped")
+        print("\nCtrl+C -> damped")
+        return
+    except Exception:
+        robot.damp()
+        time.sleep(0.5)
+        raise
+    finish(robot, damp=args.damp_on_exit)
 
 
 if __name__ == "__main__":

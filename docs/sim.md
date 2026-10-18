@@ -19,7 +19,7 @@ source env/setup_sim.sh
 python -m r1.sim.run                                # 골반 고정 + 테이블·상자 + 뷰어
 python -m r1.sim.run --base band                    # 고무줄로 매단 상태 (C++ 시뮬과 같은 조건)
 python -m r1.sim.run --headless                     # 뷰어 없이
-python -m r1.sim.run --ros-cameras                  # 카메라 영상 → ROS2 (/camera/head|front/image_raw)
+python -m r1.sim.run --ros                          # ROS2: 카메라, 상자 위치, 리셋 서비스
 python -m r1.sim.run --record out.mp4               # 카메라 영상 녹화 (--record-cam head_cam)
 python -m r1.sim.run --print-box --print-contacts   # 상자 위치, 팔 접촉 출력 (디버그)
 ```
@@ -31,11 +31,12 @@ python -m r1.sim.run --print-box --print-contacts   # 상자 위치, 팔 접촉 
 | `--base` | `fixed` | `fixed` 골반 고정(상체 조작용), `band` 고무줄, `free` 자유 |
 | `--no-table` | | 테이블·상자 없이 |
 | `--domain` / `--iface` | 1 / lo | DDS 설정 (`env/setup_sim.sh` 와 같아야 함) |
-| `--ros-cameras`, `--cam-hz`, `--cam-size` | 끔, 15, 640x480 | 카메라 영상 ROS2 발행 |
-| `--record`, `--record-cam`, `--record-fps` | | mp4 녹화 |
+| `--ros`, `--cam-hz`, `--cam-size` | 끔, 15, 640x480 | ROS2: 카메라, `/r1_sim/box_pose`, `/r1_sim/reset` ([teleop.md](teleop.md)). `--ros-cameras` 도 같은 뜻 |
+| `--seed` | 0 | 리셋 때 상자 위치 난수 시드 |
+| `--record`, `--record-cam`, `--record-fps` | | mp4 녹화 (H.264, 해상도는 `--cam-size`) |
 | `--ui` | 끔 | 뷰어 좌우 패널 표시 |
 
-뷰어 키: `Tab` / `Shift+Tab` 좌우 설정 패널, `Backspace` 리셋, `9` 고무줄 켜기/끄기, `7` / `8` 고무줄 짧게/길게 (`--base band`).
+뷰어 키: `Tab` / `Shift+Tab` 좌우 설정 패널, `Backspace` 리셋(상자 무작위), `9` 고무줄 켜기/끄기, `7` / `8` 고무줄 짧게/길게 (`--base band`).
 마우스: 왼쪽 드래그 회전, 오른쪽 드래그 이동, 휠 확대.
 
 - 뷰어 창은 1280×720 으로 뜬다. 좌우 패널은 기본으로 숨기고(`--ui` 로 표시), 시작 시점을 로봇 전신 + 테이블에 맞춘다
@@ -53,7 +54,7 @@ python -m r1.sim.run --print-box --print-contacts   # 상자 위치, 팔 접촉 
 | `head_cam` | `torso_link` 기준 (0.10, 0, 0.42), (0.32, 0, -0.05) 를 봄, fovy 70 | 시뮬 모델에 머리가 없어 근사 위치 |
 | `front_cam` | 월드 (1.3, 0, 1.3), 로봇 쪽을 봄, fovy 50 | 관찰·녹화용 |
 
-## 카메라 → ROS2 (`--ros-cameras`)
+## 카메라 → ROS2 (`--ros`)
 
 | 토픽 | 타입 | 내용 |
 |---|---|---|
@@ -63,7 +64,7 @@ python -m r1.sim.run --print-box --print-contacts   # 상자 위치, 팔 접촉 
 
 ```bash
 source env/setup_sim.sh
-python -m r1.sim.run --ros-cameras                 # 터미널 1
+python -m r1.sim.run --ros                         # 터미널 1
 ros2 launch r1_bridge view.launch.py               # 터미널 2: RViz 에 로봇 + 카메라 패널 2개
 ```
 

@@ -4,7 +4,7 @@
     python -m r1.sim.run                       # 골반 고정, 테이블·상자·카메라, 뷰어
     python -m r1.sim.run --base band           # 고무줄로 매단 상태 (C++ 시뮬과 같은 조건)
     python -m r1.sim.run --headless            # 뷰어 없이 (속도 측정, 서버)
-    python -m r1.sim.run --ros-cameras         # 카메라 영상을 ROS2 로 (/camera/head|front/image_raw)
+    python -m r1.sim.run --ros                 # ROS2: 카메라, 상자 위치, 에피소드 리셋 서비스 (docs/sim.md)
 
 실시간 루프: 시뮬 시간이 실제 시간을 따라가도록 물리 스텝을 돌리고, 2초마다 실시간 비율(RTF)을 출력한다.
 LowState.tick 은 시뮬 시간[ms] 이다.
@@ -29,9 +29,32 @@ import mujoco.viewer
 import numpy as np
 
 from r1.sim.bridge import SimBridge
-from r1.sim.scene import SceneConfig, build_model
+from r1.sim.scene import SceneConfig, body_in_pelvis, build_model, reset_episode
 
 KEY_BACKSPACE = 259
+
+
+class H264Writer:
+    """mp4 (H.264, yuv420p) 녹화. cv2.VideoWriter 의 mp4v 는 VS Code·브라우저에서 재생되지 않는다."""
+
+    def __init__(self, path: str, fps: float, width: int, height: int):
+        import av
+
+        self._c = av.open(path, mode="w")
+        self._s = self._c.add_stream("libx264", rate=int(round(fps)))
+        self._s.width, self._s.height, self._s.pix_fmt = width, height, "yuv420p"
+        self._s.options = {"crf": "23", "preset": "veryfast"}
+        self._av = av
+
+    def write(self, rgb: np.ndarray):
+        frame = self._av.VideoFrame.from_ndarray(np.ascontiguousarray(rgb), format="rgb24")
+        for pkt in self._s.encode(frame):
+            self._c.mux(pkt)
+
+    def release(self):
+        for pkt in self._s.encode():
+            self._c.mux(pkt)
+        self._c.close()
 
 
 class ElasticBand:
@@ -77,7 +100,11 @@ def main():
     p.add_argument("--ui", action="store_true", help="뷰어 좌우 설정 패널 표시 (기본: 숨김, Tab / Shift+Tab 으로 토글)")
     p.add_argument("--no-table", action="store_true")
     p.add_argument("--print-box", action="store_true", help="2초마다 상자 위치 출력")
-    p.add_argument("--ros-cameras", action="store_true", help="head_cam, front_cam 영상을 ROS2 토픽으로 발행")
+    p.add_argument("--ros", "--ros-cameras", dest="ros", action="store_true",
+                   help="ROS2: 카메라 영상, /r1_sim/box_pose, /r1_sim/reset 서비스")
+    p.add_argument("--seed", type=int, default=0, help="에피소드 리셋 때 상자 위치 난수 시드")
+    p.add_argument("--box-x-range", type=float, nargs=2, metavar=("MIN", "MAX"), help="리셋 때 상자 x 범위 (기본 0.24 0.30)")
+    p.add_argument("--box-y-range", type=float, nargs=2, metavar=("MIN", "MAX"), help="리셋 때 상자 y 범위 (기본 0.16 0.26)")
     p.add_argument("--cam-hz", type=float, default=15.0, help="ROS2 카메라 발행 주기 [Hz]")
     p.add_argument("--cam-size", default="640x480", help="카메라 해상도 WxH")
     p.add_argument("--record", metavar="OUT.mp4", help="카메라 영상을 mp4 로 저장")
@@ -86,18 +113,24 @@ def main():
     p.add_argument("--print-contacts", action="store_true", help="로봇 팔과 테이블·상자·몸통의 접촉을 바뀔 때마다 출력")
     args = p.parse_args()
 
-    m = build_model(SceneConfig(base=args.base, table=not args.no_table))
+    cfg = SceneConfig(base=args.base, table=not args.no_table)
+    if args.box_x_range:
+        cfg.box_x_range = tuple(args.box_x_range)
+    if args.box_y_range:
+        cfg.box_y_range = tuple(args.box_y_range)
+    m = build_model(cfg)
+    rng = np.random.default_rng(args.seed)
     d = mujoco.MjData(m)
     mujoco.mj_forward(m, d)
     bridge = SimBridge(m, args.domain, args.iface)
     band = ElasticBand(m) if args.base == "band" else None
     lock = threading.Lock()
+    key_reset = threading.Event()  # 뷰어 Backspace → 메인 루프에서 리셋
 
     def on_key(key):
         with lock:
             if key == KEY_BACKSPACE:
-                mujoco.mj_resetData(m, d)
-                mujoco.mj_forward(m, d)
+                key_reset.set()
             elif band and key == ord("9"):
                 band.enable = not band.enable
             elif band and key == ord("7"):
@@ -117,19 +150,17 @@ def main():
             viewer.cam.elevation = -18.0
     # 오프스크린 렌더러: 녹화와 ROS2 카메라가 함께 쓴다. 뷰어와 같은 프로세스에서 동작 확인 (종료 시 먼저 닫는다).
     cam_w, cam_h = (int(x) for x in args.cam_size.split("x"))
-    renderer = recorder = ros_cams = None
-    if args.record or args.ros_cameras:
+    renderer = recorder = ros = None
+    if args.record or args.ros:
         renderer = mujoco.Renderer(m, cam_h, cam_w)
     if args.record:
-        import cv2
-
-        recorder = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc(*"mp4v"), args.record_fps, (cam_w, cam_h))
-    if args.ros_cameras:
-        from r1.sim.ros_camera import RosCameraPublisher
+        recorder = H264Writer(args.record, args.record_fps, cam_w, cam_h)
+    if args.ros:
+        from r1.sim.ros_node import SimRosNode
 
         cams = {name: float(m.cam_fovy[m.camera(name).id]) for name in ("head_cam", "front_cam")}
-        ros_cams = RosCameraPublisher(cams, cam_w, cam_h)
-        print(f"[r1 sim] ROS2 cameras {list(cams)} {cam_w}x{cam_h} @ {args.cam_hz} Hz -> /camera/<head|front>/image_raw")
+        ros = SimRosNode(cams, cam_w, cam_h)
+        print(f"[r1 sim] ROS2 cameras {list(cams)} {cam_w}x{cam_h} @ {args.cam_hz} Hz, /r1_sim/box_pose, /r1_sim/reset")
     last_frame = last_cam = -1.0
     dt = m.opt.timestep
     print(f"[r1 sim] base={args.base} dt={dt * 1000:.1f} ms domain={args.domain} if={args.iface}")
@@ -162,12 +193,26 @@ def main():
                         last_contacts, window_contacts, window_t = window_contacts, set(), d.time
                 if recorder is not None and d.time - last_frame >= 1 / args.record_fps:
                     renderer.update_scene(d, camera=args.record_cam)
-                    recorder.write(renderer.render()[:, :, ::-1])
+                    recorder.write(renderer.render())
                     last_frame = d.time
-                if ros_cams is not None and d.time - last_cam >= 1 / args.cam_hz:
+                ros_reset = ros is not None and ros.take_reset_request()
+                if ros_reset or key_reset.is_set():
+                    key_reset.clear()
+                    info = reset_episode(m, d, cfg, rng)
+                    # 시뮬 시간이 0 으로 돌아가므로 시간 기준들을 다시 잡는다
+                    wall0, sim0 = time.perf_counter(), d.time
+                    rtf_wall, rtf_sim = wall0, sim0
+                    last_frame = last_cam = -1.0
+                    window_t = 0.0
+                    print(f"[r1 sim] reset: {info}", flush=True)
+                    if ros_reset:
+                        ros.reset_done(info)
+                if ros is not None and d.time - last_cam >= 1 / args.cam_hz:
                     for cam in ("head_cam", "front_cam"):
                         renderer.update_scene(d, camera=cam)
-                        ros_cams.publish(cam, renderer.render())
+                        ros.cams.publish(cam, renderer.render())
+                    if box_id is not None:
+                        ros.publish_box(*body_in_pelvis(m, d, "box"))
                     last_cam = d.time
                 if viewer is not None and now - last_sync > 1 / 60:
                     viewer.sync()
@@ -186,8 +231,8 @@ def main():
         if recorder is not None:
             recorder.release()
             print(f"[r1 sim] saved {args.record}")
-        if ros_cams is not None:
-            ros_cams.close()
+        if ros is not None:
+            ros.close()
         if renderer is not None:  # 뷰어보다 먼저 닫아야 종료 시 core dump 가 나지 않는다
             renderer.close()
         if viewer is not None:

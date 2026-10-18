@@ -29,7 +29,7 @@ source /opt/ros/humble/setup.bash
 cd ros2_ws && colcon build && cd ..
 ```
 
-시뮬 카메라 영상은 ROS2 패키지가 아니라 Python 시뮬이 직접 발행한다 (`python -m r1.sim.run --ros-cameras`, [sim.md](sim.md)).
+시뮬 카메라 영상은 ROS2 패키지가 아니라 Python 시뮬이 직접 발행한다 (`python -m r1.sim.run --ros`, [sim.md](sim.md)).
 RViz 설정(`r1_bridge/rviz/r1.rviz`)에 `HeadCamera`, `FrontCamera` 영상 패널이 있다. 토픽이 없으면 빈 패널로 남는다.
 
 ## r1_description

@@ -17,7 +17,7 @@ import time
 import numpy as np
 
 from r1.interface.joints import JOINT_INDEX, NUM_SIM_MOTORS
-from r1.interface.robot import R1LowLevel, wait
+from r1.interface.robot import R1LowLevel, finish, wait
 
 J = JOINT_INDEX
 
@@ -26,6 +26,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--domain", type=int, default=1)
     p.add_argument("--iface", default="lo")
+    p.add_argument("--damp-on-exit", action="store_true", help="정상 종료 때도 damp (실기 권장). 기본: 마지막 자세 유지")
     p.add_argument("--variant", default="a5", choices=["a5", "a7"])
     p.add_argument("--wave-sec", type=float, default=8.0)
     args = p.parse_args()
@@ -61,11 +62,15 @@ def main():
         wait(3.0, robot)
         print(f"home      max|err| = {np.abs(robot.tracking_error()).max():.3f} rad")
     except KeyboardInterrupt:
-        print("\nCtrl+C")
-    finally:
         robot.damp()
         time.sleep(0.5)
-        print("damped")
+        print("\nCtrl+C -> damped")
+        return
+    except Exception:
+        robot.damp()
+        time.sleep(0.5)
+        raise
+    finish(robot, damp=args.damp_on_exit)
 
 
 if __name__ == "__main__":

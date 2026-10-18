@@ -32,6 +32,9 @@ class SceneConfig:
     box_size: float = 0.05         # 한 변 [m]
     box_mass: float = 0.2          # [kg]
     box_xy: tuple[float, float] = (0.27, 0.22)
+    # 에피소드 리셋 때 상자 중심을 뽑는 범위 (x, y). 왼손으로 오른쪽(-y)으로 밀 수 있는 영역 (docs/kinematics.md 도달 범위)
+    box_x_range: tuple[float, float] = (0.24, 0.30)
+    box_y_range: tuple[float, float] = (0.16, 0.26)
     target_xy: tuple[float, float] = (0.27, 0.0)
     target_radius: float = 0.04
     cameras: bool = True
@@ -111,3 +114,31 @@ def build_model(cfg: SceneConfig | None = None) -> mujoco.MjModel:
         )
 
     return spec.compile()
+
+
+def reset_episode(m: mujoco.MjModel, d: mujoco.MjData, cfg: SceneConfig, rng: np.random.Generator) -> dict:
+    """로봇을 기본 자세로, 상자를 범위 안 무작위 위치로 되돌린다. 상자·목표 위치(골반 기준)를 돌려준다."""
+    mujoco.mj_resetData(m, d)
+    info = {"target_xy": list(cfg.target_xy), "target_radius": cfg.target_radius}
+    if cfg.table:
+        x = float(rng.uniform(*cfg.box_x_range))
+        y = float(rng.uniform(*cfg.box_y_range))
+        adr = m.jnt_qposadr[m.joint("box_free").id]
+        d.qpos[adr:adr + 3] = [x, y, table_top_z(cfg) + cfg.box_size / 2]
+        d.qpos[adr + 3:adr + 7] = [1.0, 0.0, 0.0, 0.0]
+        info["box_xy"] = [x, y]
+    mujoco.mj_forward(m, d)
+    return info
+
+
+def body_in_pelvis(m: mujoco.MjModel, d: mujoco.MjData, body: str) -> tuple[np.ndarray, np.ndarray]:
+    """body 의 위치·자세(쿼터니언 wxyz)를 골반 좌표계로."""
+    pel = m.body("pelvis").id
+    b = m.body(body).id
+    R = d.xmat[pel].reshape(3, 3)
+    pos = R.T @ (d.xpos[b] - d.xpos[pel])
+    q_pel_inv = np.zeros(4)
+    mujoco.mju_negQuat(q_pel_inv, d.xquat[pel])
+    quat = np.zeros(4)
+    mujoco.mju_mulQuat(quat, q_pel_inv, d.xquat[b])
+    return pos, quat

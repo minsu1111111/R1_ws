@@ -31,6 +31,25 @@ class CartesianArm:
             self.robot.set_target(self.q_cmd, tau_ff=self.ik.gravity_torque(self.robot.q(), self.comp))
             time.sleep(self.dt)
 
+    def servo(self, target, dt: float | None = None) -> bool:
+        """손 끝 목표로 한 주기만 IK 를 풀어 명령한다 (원격조작용, 매 주기 호출).
+
+        IK 가 실패하면(닿지 않는 곳) 명령을 바꾸지 않고 False.
+        """
+        dt = dt or self.dt
+        q_new, ok, _ = self.ik.solve(np.asarray(target, dtype=float), self.q_cmd, self.side, restarts=0)
+        if not ok:
+            q_new = self.q_cmd
+        dq_ff = (q_new - self.q_cmd) / dt
+        self.q_cmd = q_new
+        self.robot.set_target(self.q_cmd, tau_ff=self.ik.gravity_torque(self.robot.q(), self.comp), dq_ff=dq_ff)
+        return ok
+
+    def reset(self, q29: np.ndarray):
+        """로봇이 순간이동했을 때(시뮬 리셋) 명령 상태를 맞춘다."""
+        self.q_cmd = np.asarray(q29, dtype=float).copy()
+        self.robot.reset_command(self.q_cmd)
+
     def move_to(self, target, speed: float = 0.10) -> float:
         """손 끝을 지금 명령 위치에서 target 까지 직선으로 이동. 끝난 뒤 위치 오차[m] 반환."""
         target = np.asarray(target, dtype=float)

@@ -20,6 +20,7 @@ robot.start()                     # 첫 LowState 수신 대기, 현재 자세를
 robot.set_target(np.zeros(29))    # 29칸 목표 자세 [rad]
 robot.set_target(q, tau_ff=tau, dq_ff=dq)   # 중력 보상 토크, 목표 속도 (궤적 추종 시)
 q, dq = robot.q(), robot.dq()     # 현재 상태
+robot.reset_command(q)            # 목표·명령을 즉시 q 로 (시뮬 리셋으로 순간이동했을 때만)
 robot.damp()                      # 비상정지
 ```
 
@@ -51,7 +52,8 @@ set_target(q_des) ─▶ 관절 범위 클램프 ─▶ q_goal
 | 변화율 제한 | 1.0 rad/s | 목표가 갑자기 바뀌어도 천천히 따라간다 |
 | 비활성 관절 | kp = kd = tau = 0 | 변형에 없는 관절(A5 의 손목 pitch/yaw, 허리 pitch)에는 힘을 주지 않는다 |
 | `damp()` | kp = 0, kd = 2 | 위치 제어를 끄고 감쇠만 남긴다. **래치**: 다시 제어하려면 재시작 |
-| 예제의 Ctrl+C | `damp()` 호출 | |
+| 예제의 Ctrl+C·에러 | `damp()` 호출 |
+| 예제의 정상 종료 | 마지막 자세 유지 (`finish(robot, damp=False)`), `--damp-on-exit` 면 damp (D16) | |
 
 ## 변형 (A5 / A7)
 

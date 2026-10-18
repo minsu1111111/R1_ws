@@ -126,3 +126,20 @@
 3. `CYCLONEDDS_URI` 의 인터페이스가 시뮬 `interface` 와 같은가 (`lo`)
 4. `ros2_ws` 를 빌드하고 `install/setup.bash` 를 source 했는가 (`unitree_hg` 메시지 타입)
 5. ROS2 데몬이 예전 설정으로 떠 있으면 `ros2 daemon stop` 후 재시도
+
+## ACT 정책이 준비 자세에서 출발하지 못하고 맴돎
+
+- **증상**: 닫힌 루프 실행에서 손이 시작 위치 근처에서 떨기만 함. 오프라인(학습 데이터 프레임) 예측은 정상.
+- **원인**: `n_action_steps` < `chunk_size` 이고 시연 동작이 천천히 출발함 → 재예측 때마다 '출발 직전' 관측 → 출발 반복.
+- **해결**: `--n-action-steps 30` (= chunk_size) 또는 temporal ensembling. docs/training.md 6절, D18.
+
+## 뷰어 + ROS 카메라로 돈 시뮬을 kill -INT 했을 때 segfault
+
+- **증상**: 평가 후 `kill -INT` 로 시뮬을 끄자 `Segmentation fault (core dumped)` (2026-10-18, 학습 동시 실행 중).
+- **상태**: 원인 미확인. 결과 기록에는 영향 없음 (평가 프로그램은 정상 종료). 뷰어 창은 직접 닫거나 Ctrl+C 로 끄는 것을 권장.
+
+## 녹화한 mp4 가 재생되지 않음 (VS Code, 브라우저)
+
+- **원인**: `cv2.VideoWriter` 의 `mp4v` 코덱(MPEG-4 Part 2)은 대부분의 플레이어가 지원하지 않는다.
+- **해결**: `r1.sim.run --record` 를 PyAV + libx264 (H.264, yuv420p) 로 바꿈 (`H264Writer`). 예전 파일은 변환:
+  `ffmpeg -i in.mp4 -c:v libx264 -pix_fmt yuv420p -movflags +faststart out.mp4`

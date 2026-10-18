@@ -6,7 +6,7 @@ Unitree **R1 EDU** 휴머노이드로 **모방학습 / VLA / RL**을 하기 위�
 - **로컬 PC**: MuJoCo 시뮬, DDS 제어, ROS2 시각화·기록, 원격조작·데이터 수집, 학습된 정책 평가
 - **외부 서버**: LeRobot(ACT / VLA) 학습, `unitree_rl_mjlab` RL 학습, VLA 추론 서버
 
-> 📚 자세한 문서는 [docs/](docs/README.md): [설치](docs/setup.md) · [구성](docs/architecture.md) · [R1 모델](docs/r1_model.md) · [제어 래퍼](docs/r1_interface.md) · [ROS2](docs/ros2.md) · [IK](docs/kinematics.md) · [시뮬](docs/sim.md) · [설계 결정](docs/decisions.md) · [문제 해결](docs/troubleshooting.md)
+> 📚 자세한 문서는 [docs/](docs/README.md): [설치](docs/setup.md) · [구성](docs/architecture.md) · [R1 모델](docs/r1_model.md) · [제어 래퍼](docs/r1_interface.md) · [ROS2](docs/ros2.md) · [IK](docs/kinematics.md) · [시뮬](docs/sim.md) · [원격조작·기록](docs/teleop.md) · [학습·평가](docs/training.md) · [설계 결정](docs/decisions.md) · [문제 해결](docs/troubleshooting.md)
 
 ## 구조 개요
 
@@ -17,7 +17,7 @@ r1.sim (Python 시뮬) / unitree_mujoco (C++ 시뮬) / 실제 R1
         │     └ r1.kinematics                     ← IK, 손 끝 직선 이동
         └── ROS2 Humble (rmw_cyclonedds_cpp)     ← 관찰·기록·센서 통합
               ├ r1_bridge      → /joint_states, /imu → RViz
-              ├ /camera/head|front/image_raw  (시뮬: r1.sim --ros-cameras)
+              ├ /camera/head|front/image_raw  (시뮬: r1.sim --ros)
               └ rosbag2
 ```
 
@@ -32,7 +32,7 @@ aisl_robot_ws/
 ├── r1/               [로컬] Python 패키지 (sim/실기 공통)
 │   ├── interface/      DDS 래퍼: 상태 읽기, LowCmd, 관절·속도 제한, E-stop
 │   ├── kinematics/     팔 IK (pinocchio)
-│   ├── teleop/         원격조작 + LeRobot 형식 데이터 기록
+│   ├── teleop/         키보드 원격조작 + LeRobot 데이터 기록
 │   ├── policy_runner/  정책 실행 (로컬 추론 / 서버 VLA 클라이언트)
 │   └── sim/            Python 시뮬: 조작 장면, DDS 브리지, 카메라 → ROS2
 ├── ros2_ws/src/      [로컬] ROS2 패키지 (colcon)
@@ -144,15 +144,15 @@ R1_SERVER=user@host R1_SERVER_WS=~/aisl_robot_ws bash env/sync_to_server.sh both
 - [x] 5. `r1.interface`: LowState 읽기, LowCmd PD, 제한·E-stop → [docs/r1_interface.md](docs/r1_interface.md)
 - [x] 6. `r1_bridge`: RViz에서 시뮬 자세 확인 → [docs/ros2.md](docs/ros2.md)
 - [x] 7. 팔 IK [kinematics](docs/kinematics.md) / 조작 장면 + Python 시뮬 + 상자 밀기 + 카메라 → ROS2 [sim](docs/sim.md)
-- [ ] 8. 원격조작 + LeRobot 데이터 수집
-- [ ] 9. ACT 학습(서버) → 시뮬 폐루프 평가
+- [x] 8. 원격조작 + LeRobot 데이터 수집 — 키보드 원격조작 도구 + 자동 시연 140 개 [teleop](docs/teleop.md)
+- [x] 9. ACT 학습(로컬 1060) → 시뮬 평가: **상자 밀기 100 %** (기준선 43 %) [training](docs/training.md)
 - [ ] 10. VLA 추론 서버-클라이언트 (더미 모델 → pi0 / GR00T)
 - [ ] 11. RL 보행 학습(서버) → sim2sim 검증
 
 ## 주의
 
 - 시뮬 모델은 모터 슬롯 29개 중 **실제 관절 24개(팔 5자유도)**, 나머지 5개는 더미입니다. 머리 관절, 카메라, 손은 없습니다.
-- 구매 구성: R1 EDU, **손 없음**. 팔(A5/A7)은 미확정 → [docs/r1_model.md](docs/r1_model.md). 첫 IL 과제는 잡지 않는 조작(밀기·누르기) → [D9](docs/decisions.md)
+- 구매 구성: R1 EDU, **손 없음**, **팔 5자유도(A5, 공식 사양으로 확정)**, 머리 2자유도, 양안 카메라 → [docs/r1_model.md](docs/r1_model.md). 첫 IL 과제는 잡지 않는 조작(밀기·누르기) → [D9](docs/decisions.md)
 - 로컬에서는 conda 를 켜지 않습니다 (ROS2 Humble 과 충돌) → [docs/decisions.md](docs/decisions.md) D2
 - 시뮬과 실기를 같은 네트워크·도메인에서 동시에 켜면 토픽이 섞입니다.
 - 실기에서 저수준 제어를 처음 할 때는 **반드시 거치대에 매단 상태**에서 하고, 비상정지를 먼저 확인합니다.

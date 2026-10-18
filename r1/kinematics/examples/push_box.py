@@ -13,7 +13,7 @@ import time
 
 import numpy as np
 
-from r1.interface.robot import R1LowLevel, wait
+from r1.interface.robot import R1LowLevel, finish, wait
 from r1.kinematics.arm_ik import ArmIK
 from r1.kinematics.motion import CartesianArm
 
@@ -32,6 +32,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--domain", type=int, default=1)
     p.add_argument("--iface", default="lo")
+    p.add_argument("--damp-on-exit", action="store_true", help="정상 종료 때도 damp (실기 권장). 기본: 마지막 자세 유지")
     p.add_argument("--speed", type=float, default=0.10, help="손 끝 속도 [m/s]")
     args = p.parse_args()
 
@@ -56,11 +57,15 @@ def main():
         robot.set_target(np.zeros(29), tau_ff=np.zeros(29))
         wait(3.0, robot)
     except KeyboardInterrupt:
-        print("\nCtrl+C")
-    finally:
         robot.damp()
         time.sleep(0.5)
-        print("damped")
+        print("\nCtrl+C -> damped")
+        return
+    except Exception:
+        robot.damp()
+        time.sleep(0.5)
+        raise
+    finish(robot, damp=args.damp_on_exit)
 
 
 if __name__ == "__main__":

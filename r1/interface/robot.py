@@ -134,6 +134,17 @@ class R1LowLevel:
             if kd is not None:
                 self.kd = np.asarray(kd, dtype=float)
 
+    def reset_command(self, q: np.ndarray):
+        """목표와 실제 보내는 명령을 변화율 제한 없이 즉시 q 로 바꾼다.
+
+        로봇이 순간이동한 경우(시뮬 에피소드 리셋)에만 쓴다. 실기에서 쓰면 관절이 급히 움직일 수 있다.
+        """
+        q = np.clip(np.asarray(q, dtype=float), self.q_lo, self.q_hi)
+        with self._lock:
+            self._q_goal = q.copy()
+            self._q_cmd = q.copy()
+            self._dq_ff = np.zeros(NUM_SIM_MOTORS)
+
     def damp(self):
         """비상정지. 위치 제어를 끄고 속도 감쇠만 남긴다 (래치)."""
         with self._lock:
@@ -172,6 +183,22 @@ class R1LowLevel:
                 m.q, m.dq, m.tau = float(q_cmd[i]), float(dq_ff[i]), float(tau_ff[i])
         cmd.crc = self._crc.Crc(cmd)
         self._pub.Write(cmd)
+
+
+def finish(robot: R1LowLevel, damp: bool):
+    """프로그램 정상 종료 처리.
+
+    damp=False: 마지막 자세 명령을 유지한 채 끝낸다. 시뮬은 마지막 LowCmd 를 계속 적용하므로 자세가 유지된다.
+    damp=True : 감쇠 모드로 끝낸다 (힘을 빼고 천천히 주저앉음). 실기에서 명령이 끊겼을 때의 동작을 확인하기 전까지는
+                실기에서는 이쪽을 쓴다. Ctrl+C·에러는 항상 damp (예제의 except 블록).
+    """
+    if damp:
+        robot.damp()
+        time.sleep(0.5)
+        print("damped")
+    else:
+        time.sleep(0.2)
+        print("done (holding last pose)")
 
 
 def wait(seconds: float, robot: R1LowLevel):

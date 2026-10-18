@@ -36,11 +36,14 @@ def camera_info(width: int, height: int, fovy_deg: float, frame_id: str) -> Came
 
 
 class RosCameraPublisher:
-    def __init__(self, cameras: dict[str, float], width: int, height: int):
-        """cameras: {MuJoCo 카메라 이름: fovy[deg]}"""
-        if not rclpy.ok():
-            rclpy.init()
-        self.node = rclpy.create_node("r1_sim_camera")
+    def __init__(self, cameras: dict[str, float], width: int, height: int, node=None):
+        """cameras: {MuJoCo 카메라 이름: fovy[deg]}. node 를 주면 그 노드에 퍼블리셔를 만든다."""
+        self._own_node = node is None
+        if self._own_node:
+            if not rclpy.ok():
+                rclpy.init()
+            node = rclpy.create_node("r1_sim_camera")
+        self.node = node
         self.width, self.height = width, height
         self._img, self._info, self._pub_img, self._pub_info = {}, {}, {}, {}
         for cam, fovy in cameras.items():
@@ -63,5 +66,6 @@ class RosCameraPublisher:
         self._pub_info[cam].publish(info)
 
     def close(self):
-        self.node.destroy_node()
-        rclpy.try_shutdown()
+        if self._own_node:
+            self.node.destroy_node()
+            rclpy.try_shutdown()
