@@ -7,7 +7,6 @@
 | `unitree_hg`, `unitree_go`, `unitree_api` | ament_cmake | Unitree 메시지 (third_party/unitree_ros2 심볼릭 링크) |
 | `r1_description` | ament_cmake | R1 전신 URDF + 메시 |
 | `r1_bridge` | ament_python | `/lowstate` → `/joint_states`, `/imu`, TF + RViz launch |
-| `r1_sim_camera` | (예정) | MuJoCo 카메라 → `sensor_msgs/Image` |
 
 ## 실행
 
@@ -29,6 +28,9 @@ python -m r1.interface.examples.wave_arm            # 터미널 3: 움직여 보
 source /opt/ros/humble/setup.bash
 cd ros2_ws && colcon build && cd ..
 ```
+
+시뮬 카메라 영상은 ROS2 패키지가 아니라 Python 시뮬이 직접 발행한다 (`python -m r1.sim.run --ros-cameras`, [sim.md](sim.md)).
+RViz 설정(`r1_bridge/rviz/r1.rviz`)에 `HeadCamera`, `FrontCamera` 영상 패널이 있다. 토픽이 없으면 빈 패널로 남는다.
 
 ## r1_description
 

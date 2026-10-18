@@ -6,17 +6,18 @@ Unitree **R1 EDU** 휴머노이드로 **모방학습 / VLA / RL**을 하기 위�
 - **로컬 PC**: MuJoCo 시뮬, DDS 제어, ROS2 시각화·기록, 원격조작·데이터 수집, 학습된 정책 평가
 - **외부 서버**: LeRobot(ACT / VLA) 학습, `unitree_rl_mjlab` RL 학습, VLA 추론 서버
 
-> 📚 자세한 문서는 [docs/](docs/README.md): [설치](docs/setup.md) · [구성](docs/architecture.md) · [R1 모델](docs/r1_model.md) · [제어 래퍼](docs/r1_interface.md) · [ROS2](docs/ros2.md) · [설계 결정](docs/decisions.md) · [문제 해결](docs/troubleshooting.md)
+> 📚 자세한 문서는 [docs/](docs/README.md): [설치](docs/setup.md) · [구성](docs/architecture.md) · [R1 모델](docs/r1_model.md) · [제어 래퍼](docs/r1_interface.md) · [ROS2](docs/ros2.md) · [IK](docs/kinematics.md) · [시뮬](docs/sim.md) · [설계 결정](docs/decisions.md) · [문제 해결](docs/troubleshooting.md)
 
 ## 구조 개요
 
 ```
-unitree_mujoco (R1 sim) 또는 실제 R1
+r1.sim (Python 시뮬) / unitree_mujoco (C++ 시뮬) / 실제 R1
         │  rt/lowstate, rt/lowcmd  (CycloneDDS, unitree_hg)
         ├── r1.interface (unitree_sdk2_python)   ← 제어 주경로: PD, 정책 실행, 안전 제한
+        │     └ r1.kinematics                     ← IK, 손 끝 직선 이동
         └── ROS2 Humble (rmw_cyclonedds_cpp)     ← 관찰·기록·센서 통합
               ├ r1_bridge      → /joint_states, /imu → RViz
-              ├ r1_sim_camera  → /camera/*/image_raw
+              ├ /camera/head|front/image_raw  (시뮬: r1.sim --ros-cameras)
               └ rosbag2
 ```
 
@@ -32,12 +33,12 @@ aisl_robot_ws/
 │   ├── interface/      DDS 래퍼: 상태 읽기, LowCmd, 관절·속도 제한, E-stop
 │   ├── kinematics/     팔 IK (pinocchio)
 │   ├── teleop/         원격조작 + LeRobot 형식 데이터 기록
-│   └── policy_runner/  정책 실행 (로컬 추론 / 서버 VLA 클라이언트)
+│   ├── policy_runner/  정책 실행 (로컬 추론 / 서버 VLA 클라이언트)
+│   └── sim/            Python 시뮬: 조작 장면, DDS 브리지, 카메라 → ROS2
 ├── ros2_ws/src/      [로컬] ROS2 패키지 (colcon)
 │   ├── unitree_hg|go|api  → third_party/unitree_ros2 심볼릭 링크
 │   ├── r1_description/    URDF + meshes
-│   ├── r1_bridge/         LowState → JointState / Imu, launch, RViz 설정
-│   └── r1_sim_camera/     MuJoCo 카메라 → sensor_msgs/Image
+│   ├── r1_bridge/         LowState → JointState / Imu, launch, RViz 설정 (카메라 패널 포함)
 ├── sim/              [로컬] 시뮬 실행 스크립트·설정, MJCF 장면 (R1 + 테이블·물체·카메라)
 ├── training/         [서버] 학습 코드
 │   ├── il/             LeRobot 학습 설정, R1 데이터 변환
@@ -102,6 +103,18 @@ ros2 topic list            # /lowstate 가 보여야 함
 ros2 topic echo /lowstate --once
 ```
 
+### 조작 장면 (Python 시뮬)
+
+```bash
+source env/setup_sim.sh
+python -m r1.sim.run                                 # 터미널 1: 테이블·상자·카메라 장면
+python -m r1.kinematics.examples.push_box            # 터미널 2: 왼손으로 상자를 목표까지 밀기
+```
+
+![상자 밀기](docs/images/push_demo.jpg)
+
+개발·데이터 수집은 Python 시뮬, C++ 시뮬은 비교용입니다 → [docs/sim.md](docs/sim.md)
+
 ### 실기로 전환
 
 ```bash
@@ -130,7 +143,7 @@ R1_SERVER=user@host R1_SERVER_WS=~/aisl_robot_ws bash env/sync_to_server.sh both
 - [x] 4. `r1_description` (공식 전신 URDF, 관절명·범위 시뮬과 일치) → [docs/ros2.md](docs/ros2.md)
 - [x] 5. `r1.interface`: LowState 읽기, LowCmd PD, 제한·E-stop → [docs/r1_interface.md](docs/r1_interface.md)
 - [x] 6. `r1_bridge`: RViz에서 시뮬 자세 확인 → [docs/ros2.md](docs/ros2.md)
-- [ ] 7. 팔 IK, 조작 장면(테이블·물체·카메라), 카메라 토픽
+- [x] 7. 팔 IK [kinematics](docs/kinematics.md) / 조작 장면 + Python 시뮬 + 상자 밀기 + 카메라 → ROS2 [sim](docs/sim.md)
 - [ ] 8. 원격조작 + LeRobot 데이터 수집
 - [ ] 9. ACT 학습(서버) → 시뮬 폐루프 평가
 - [ ] 10. VLA 추론 서버-클라이언트 (더미 모델 → pi0 / GR00T)

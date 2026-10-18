@@ -18,6 +18,7 @@ import numpy as np
 robot = R1LowLevel(domain_id=1, interface="lo", variant="a5")   # 실기: domain_id=0, interface="enp3s0"
 robot.start()                     # 첫 LowState 수신 대기, 현재 자세를 첫 목표로 잡고 제어 스레드 시작
 robot.set_target(np.zeros(29))    # 29칸 목표 자세 [rad]
+robot.set_target(q, tau_ff=tau, dq_ff=dq)   # 중력 보상 토크, 목표 속도 (궤적 추종 시)
 q, dq = robot.q(), robot.dq()     # 현재 상태
 robot.damp()                      # 비상정지
 ```
@@ -70,7 +71,8 @@ set_target(q_des) ─▶ 관절 범위 클램프 ─▶ q_goal
 | 팔 흔들기 (팔꿈치 ±0.5 rad, 0.5 Hz) | 0.090 rad |
 | 기본 자세 복귀 | 0.028 rad |
 
-- 정지 상태 오차는 중력 보상 없이 PD 만 쓰기 때문이다. 필요하면 `set_target(q, tau_ff=...)` 로 중력 보상 토크를 더한다.
+- 정지 상태 오차는 중력 보상 없이 PD 만 쓰기 때문이다. `ArmIK.gravity_torque()` 로 계산한 토크를 `tau_ff` 로 넣으면 손 끝 정지 오차가 34 → 3 mm 로 준다 ([kinematics.md](kinematics.md)).
+- 궤적을 따라갈 때는 `dq_ff`(목표 속도)를 같이 준다. 주지 않으면 kd 가 움직임을 붙잡는다. 변화율 제한에 걸린 관절은 자동으로 `dq_ff` 를 끈다.
 - 시뮬은 LowCmd 의 `mode` 필드를 보지 않는다 (`tau + kp(q-q') + kd(dq-dq')` 만 적용). 실기에서는 `mode=1` 이어야 모터가 켜진다.
 
 ## 실기에서 추가로 할 일

@@ -7,6 +7,8 @@
 | [r1_model.md](r1_model.md) | R1 MuJoCo 모델 분석: 관절표, 더미 관절, 센서, 실기와의 차이 |
 | [ros2.md](ros2.md) | ROS2 패키지: r1_description, r1_bridge, RViz 실행 |
 | [r1_interface.md](r1_interface.md) | `r1.interface` 저수준 제어 래퍼: 사용법, 안전 장치, 시험 결과 |
+| [sim.md](sim.md) | Python 시뮬: 조작 장면, 실행 옵션, C++ 시뮬과 비교, 상자 밀기 결과 |
+| [kinematics.md](kinematics.md) | 팔 FK/IK, 작업 영역, 손 끝 추종 오차 분석 |
 | [decisions.md](decisions.md) | 설계 결정 기록 (무엇을, 왜, 근거) |
 | [troubleshooting.md](troubleshooting.md) | 겪은 문제와 해결 방법 |
 

@@ -14,3 +14,8 @@ lerobot==0.4.1
 
 # colcon-core(시스템 ROS2) 가 setuptools<80 을 요구. lerobot 0.4.1 은 <81 이라 둘 다 만족.
 setuptools<80
+
+# --system-site-packages 로 시스템(apt) scipy 1.8 / matplotlib 이 보이는데 numpy 1 용으로 빌드되어 import 가 깨진다.
+# numpy 2 호환 버전을 venv 에 설치해 시스템 것을 가린다.
+scipy>=1.13
+matplotlib>=3.8

@@ -22,6 +22,26 @@ Visualization Manager:
       Name: TF
       Enabled: false
       Show Names: false
+    - Class: rviz_default_plugins/Image
+      Name: HeadCamera
+      Enabled: true
+      Normalize Range: true
+      Topic:
+        Value: /camera/head/image_raw
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+    - Class: rviz_default_plugins/Image
+      Name: FrontCamera
+      Enabled: true
+      Normalize Range: true
+      Topic:
+        Value: /camera/front/image_raw
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
   Global Options:
     Fixed Frame: world
     Background Color: 48; 48; 48
@@ -42,5 +62,5 @@ Visualization Manager:
       Yaw: 0.6
       Target Frame: world
 Window Geometry:
-  Width: 1000
-  Height: 750
+  Width: 1400
+  Height: 850

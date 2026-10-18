@@ -27,6 +27,49 @@
 - **해결**: 같은 터미널에서 `source env/setup_sim.sh` 를 다시 하거나 새 터미널을 연다.
 - 새 패키지를 `colcon build` 한 뒤에는 열려 있는 터미널 모두 다시 source 한다. (기존 패키지 코드만 고친 경우는 필요 없음)
 
+## venv 에서 scipy / matplotlib import 실패 (`numpy.dtype size changed`, `numpy.core.multiarray failed to import`)
+
+- **원인**: `--system-site-packages` 때문에 apt 의 scipy 1.8 / matplotlib(numpy 1 빌드)이 보인다. venv 는 numpy 2.
+  pip 는 시스템 scipy 를 "이미 설치됨"으로 보고 설치를 건너뛴다.
+- **해결**: `env/constraints.txt` 에 `scipy>=1.13`, `matplotlib>=3.8` 을 넣고 venv 에 설치.
+- 확인: `python -c "import scipy; print(scipy.__file__)"` 가 `.venv/` 경로여야 한다. `/usr/lib/...` 면 시스템 것.
+- 참고: matplotlib 3D(`Axes3D`) 경고는 시스템 `mpl_toolkits` 가 섞여서 나온다. 2D 그래프는 정상.
+
+## `lowstate_bridge` 가 CPU 코어 하나를 거의 다 씀 (~96%)
+
+- **원인**: Python(rclpy)이 ~900 Hz `LowState`(모터 35칸)를 매번 역직렬화한다.
+- **영향**: 같은 PC 의 다른 프로세스(시뮬, 제어 코드)와 CPU 를 다툰다. 제어 경로(DDS 직접)에는 끼지 않는다.
+- **대응 (예정)**: 브리지를 C++ 노드로 바꾸거나, 필요할 때만 실행 (`rviz:=false` 로도 브리지는 돈다).
+
+## C++ 시뮬이 실시간보다 느림 (손 끝 추종 지연)
+
+- **증상**: 팔 궤적 추종에서 ~160 ms 지연. kp 를 올려도 응답 시간이 거의 그대로.
+- **측정**: 중력 낙하 시간 오프라인(시뮬 시간) 182 ms vs C++ 시뮬(실제 시간) 310 ms → 약 0.6배속.
+- **원인 (추정)**: MuJoCo simulate 구조상 화면 갱신 사이에만 물리 계산을 한다. 다른 시뮬·RViz·브리지가 함께 돌아 CPU 부하도 있었다.
+- **대응**: 측정은 다른 무거운 프로세스를 끄고 한다. Python 시뮬(7단계)에서 시뮬 시간 기준으로 재확인 ([kinematics.md](kinematics.md)).
+
+## Python 시뮬: 제어 시작 직후 손이 상자를 쳐서 밀어냄
+
+- **증상**: `push_box` 의 "lower" 단계 오차 32 mm, 상자가 엉뚱한 곳에 있음. `--print-contacts` 로 보면 t=0.1 s 에 양 손목-테이블 접촉, 제어 시작 직후 손목-상자 접촉.
+- **원인**: 제어 프로그램이 연결되기 전 토크 0 → 팔이 테이블로 떨어짐 → 떨어진 자세에서 출발하며 상자를 침.
+- **해결**: `SimBridge` 가 첫 명령 전에는 기본 자세를 PD 로 유지하도록 변경 (D12).
+- 교훈: 오프라인(같은 프로세스) 시험과 DDS 시험 결과가 다르면 **시작 조건**부터 비교한다. `--print-contacts` 가 원인 찾기에 유용했다.
+
+## 손을 테이블 가까이 내리면 막힘 (주먹 기울기)
+
+- **원인**: 손을 내리면 손목이 손 끝보다 높아져 주먹 앞쪽 아랫부분이 먼저 테이블에 닿는다. 주먹 중심 기준 여유(3.5 cm)가 사라진다.
+- **해결**: 경로 전체에서 `mujoco.mj_geomDistance` 로 손-테이블 여유를 계산해 높이를 정한다 (`push_box.py` 의 `PUSH_Z`).
+
+## rclpy 이미지 발행이 매우 느림 (640x480 한 장에 ~117 ms)
+
+- **원인**: `msg.data = arr.tobytes()` 처럼 `bytes` 를 넣으면 rclpy(Humble) 메시지 setter 가 원소마다 검사한다.
+- **해결**: `msg.data = array.array("B", arr.tobytes())` → 0.33 ms (약 350배). `memoryview` 도 느림(58 ms).
+
+## 시뮬 종료 시 core dump (뷰어 + 오프스크린 렌더러)
+
+- **원인**: `mujoco.Renderer` 를 명시적으로 닫지 않은 채 프로세스가 끝나면 GL 정리 순서가 꼬인다.
+- **해결**: 종료 시 `renderer.close()` 를 뷰어보다 먼저 호출 (`r1/sim/run.py` 의 `finally`). 명시적으로 닫으면 순서와 무관하게 정상 종료됨을 확인.
+
 ## robot_state_publisher: `The root link pelvis_link has an inertia specified in the URDF, but KDL does not support...`
 
 - 공식 R1.urdf 의 루트 링크에 관성값이 있어서 나오는 경고. RViz 표시와 TF 에는 영향 없음 (확인함). 무시.
@@ -51,7 +94,7 @@
 
 - **증상**: venv(numpy 2) 에서 `from cv_bridge import CvBridge` 후 사용 시 실패.
 - **원인**: apt 로 설치된 `cv_bridge`, 시스템 `cv2` 가 numpy 1 로 빌드됨.
-- **해결**: cv_bridge 를 쓰지 않고 `tobytes()` / `np.frombuffer()` 로 직접 변환 (D5).
+- **해결**: cv_bridge 를 쓰지 않고 `array.array("B", arr.tobytes())` / `np.frombuffer()` 로 직접 변환 (D5). `bytes` 를 그대로 넣으면 매우 느리다 (위 항목).
 
 ## `pip` 중 `Can't uninstall 'Pygments'. No files were found to uninstall.`
 

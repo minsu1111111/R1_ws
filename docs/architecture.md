@@ -28,7 +28,8 @@
 |---|---|
 | 관절 PD 제어, 정책 실행, 원격조작 명령 | DDS (`r1.interface`) |
 | RViz 시각화, tf, rosbag 기록 | ROS2 |
-| 카메라·LiDAR 드라이버, SLAM, Nav2, MoveIt2 | ROS2 |
+| 카메라 영상 (시뮬: `r1.sim --ros-cameras`, 실기: 카메라 드라이버) | ROS2 |
+| LiDAR 드라이버, SLAM, Nav2, MoveIt2 | ROS2 |
 | 학습 데이터 저장 | LeRobot 데이터셋 (rosbag 아님) |
 
 제어 루프는 ROS2를 거치지 않습니다. 지연과 의존성을 줄이기 위해서입니다.

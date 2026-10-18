@@ -163,4 +163,5 @@ sub.Init(lambda m: print(m.motor_state[0].q), 10)
 | torch | 2.7.1+cu126 (sm_60 포함 → GTX 1060 사용 가능) |
 | pinocchio (`pin`) | 4.1.0 |
 | setuptools | 79.0.1 (<80, colcon 호환) |
+| scipy / matplotlib | 1.15.3 / 3.10.9 (venv, 시스템 numpy1 빌드를 가림) |
 | unitree_sdk2 (C++) | `third_party/unitree_sdk2/install` |

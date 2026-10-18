@@ -58,6 +58,7 @@ class R1LowLevel:
         self._q_goal = None   # 사용자가 준 목표
         self._q_cmd = None    # 변화율 제한을 거쳐 실제로 보내는 목표
         self._tau_ff = np.zeros(n)
+        self._dq_ff = np.zeros(n)
         self._damped = False
 
         self._state = None
@@ -108,13 +109,23 @@ class R1LowLevel:
         return np.array(self._state.imu_state.quaternion)  # w, x, y, z
 
     # ---------------------------------------------------------------- 명령
-    def set_target(self, q_des: np.ndarray, tau_ff: np.ndarray | None = None):
-        """29칸 목표 자세. 범위 밖 값은 잘리고, 변화율 제한을 거쳐 전달된다."""
+    def set_target(
+        self,
+        q_des: np.ndarray,
+        tau_ff: np.ndarray | None = None,
+        dq_ff: np.ndarray | None = None,
+    ):
+        """29칸 목표 자세. 범위 밖 값은 잘리고, 변화율 제한을 거쳐 전달된다.
+
+        tau_ff: 피드포워드 토크 (예: 중력 보상). 주지 않으면 이전 값 유지.
+        dq_ff : 목표 속도 (궤적을 따라갈 때). 주지 않으면 0 → kd 가 움직임을 붙잡아 추종이 늦어진다.
+        """
         q_des = np.clip(np.asarray(q_des, dtype=float), self.q_lo, self.q_hi)
         with self._lock:
             self._q_goal = q_des
             if tau_ff is not None:
                 self._tau_ff = np.asarray(tau_ff, dtype=float)
+            self._dq_ff = np.zeros(NUM_SIM_MOTORS) if dq_ff is None else np.asarray(dq_ff, dtype=float)
 
     def set_gains(self, kp: np.ndarray | None = None, kd: np.ndarray | None = None):
         with self._lock:
@@ -144,19 +155,21 @@ class R1LowLevel:
             step = np.clip(self._q_goal - self._q_cmd, -self.max_step, self.max_step)
             self._q_cmd = self._q_cmd + step
             q_cmd, kp, kd, tau_ff, damped = self._q_cmd, self.kp, self.kd, self._tau_ff, self._damped
+            # 변화율 제한에 걸린 관절은 속도 피드포워드를 끈다 (목표와 어긋난 속도를 밀지 않도록)
+            dq_ff = np.where(np.abs(step) < self.max_step, self._dq_ff, 0.0)
 
         cmd = self._cmd
         cmd.mode_pr = MODE_PR
         cmd.mode_machine = self._mode_machine
         for i in range(NUM_SIM_MOTORS):
             m = cmd.motor_cmd[i]
-            m.dq = 0.0
             if not self.active[i]:
-                m.mode, m.q, m.kp, m.kd, m.tau = 0, 0.0, 0.0, 0.0, 0.0
+                m.mode, m.q, m.dq, m.kp, m.kd, m.tau = 0, 0.0, 0.0, 0.0, 0.0, 0.0
             elif damped:
-                m.mode, m.q, m.kp, m.kd, m.tau = 1, 0.0, 0.0, self.damping_kd, 0.0
+                m.mode, m.q, m.dq, m.kp, m.kd, m.tau = 1, 0.0, 0.0, 0.0, self.damping_kd, 0.0
             else:
-                m.mode, m.q, m.kp, m.kd, m.tau = 1, float(q_cmd[i]), float(kp[i]), float(kd[i]), float(tau_ff[i])
+                m.mode, m.kp, m.kd = 1, float(kp[i]), float(kd[i])
+                m.q, m.dq, m.tau = float(q_cmd[i]), float(dq_ff[i]), float(tau_ff[i])
         cmd.crc = self._crc.Crc(cmd)
         self._pub.Write(cmd)
 
