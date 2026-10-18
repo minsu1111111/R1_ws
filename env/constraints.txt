@@ -1,0 +1,16 @@
+# 로컬 venv 버전 고정 (ROS2 Humble / Python 3.10 과 호환)
+# pip install -c env/constraints.txt ...
+
+# lerobot 0.4.1 (rerun-sdk>=0.24) 이 numpy>=2 를 요구한다.
+# ROS2 Humble 메시지/rclpy 는 numpy 2 에서 정상 동작 확인됨.
+# 단, 시스템 cv_bridge 는 numpy 1 로 빌드되어 깨지므로 사용하지 않는다 (arr.tobytes() 로 변환).
+numpy>=2,<2.3
+
+# unitree_sdk2_python 요구 버전 (실기와 동일)
+cyclonedds==0.10.2
+
+# unitree_IL_lerobot 이 고정한 버전, 서버 il 환경과 동일하게 유지
+lerobot==0.4.1
+
+# colcon-core(시스템 ROS2) 가 setuptools<80 을 요구. lerobot 0.4.1 은 <81 이라 둘 다 만족.
+setuptools<80

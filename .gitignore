@@ -1,0 +1,33 @@
+# 외부 저장소 (env/clone_third_party.sh 로 받음)
+third_party/*
+!third_party/README.md
+
+# 데이터 / 체크포인트 (서버와 rsync)
+data/**
+!data/datasets/
+!data/checkpoints/
+!data/**/.gitkeep
+
+# ROS2 colcon 산출물, third_party 심볼릭 링크
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+ros2_ws/src/unitree_hg
+ros2_ws/src/unitree_go
+ros2_ws/src/unitree_api
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+*.pyc
+
+# 학습 로그
+wandb/
+outputs/
+logs/
+*.mp4
+
+# 에디터
+.vscode/
+.idea/

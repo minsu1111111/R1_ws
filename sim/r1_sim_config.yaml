@@ -1,0 +1,22 @@
+# R1 C++ 시뮬 설정 (unitree_mujoco/simulate/config.yaml 형식)
+# sim/run_r1_sim.sh 가 실행 전에 third_party/unitree_mujoco/simulate/config.yaml 로 복사한다.
+# 시뮬레이터는 그 위치의 config.yaml 만 읽기 때문 (main.cc: proj_dir / "config.yaml").
+# 여기서 고치고, third_party 쪽 파일은 직접 고치지 않는다. (docs/decisions.md D8)
+
+robot: "r1"
+robot_scene: "scene.xml"   # unitree_robots/r1/ 기준. run_r1_sim.sh 인자로 덮어쓸 수 있음
+
+domain_id: 1               # env/setup_sim.sh 의 ROS_DOMAIN_ID 와 같아야 함
+interface: "lo"
+idl_type: -1               # -1: 모터 수로 자동 선택 → R1(29) 은 unitree_hg
+
+use_joystick: 0
+joystick_type: "xbox"
+joystick_device: "/dev/input/js0"
+joystick_bits: 16
+
+print_scene_information: 0 # 1 이면 링크/관절/센서 목록 출력 (docs/r1_model.md 에 정리됨)
+
+# 가상 고무줄: torso_link 를 (0, 0, 3 m) 지점에 스프링으로 매단다. 실기의 거치대 역할.
+# 시뮬 창에서  9: 켜기/끄기   7 또는 ↑: 줄 짧게(0.1 m)   8 또는 ↓: 줄 길게(0.1 m)   Backspace: 리셋
+enable_elastic_band: 1

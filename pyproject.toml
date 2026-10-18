@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "r1"
+version = "0.0.1"
+description = "Unitree R1 local tooling: DDS interface, kinematics, teleop, policy runner"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "mujoco",
+]
+
+[tool.setuptools.packages.find]
+include = ["r1*"]
